@@ -30,13 +30,28 @@
 
 #include "register_types.h"
 
+#include "agent.h"
+#include "crowd.h"
+#include "detour_navigation.h"
+#include "detour_navigation_mesh.h"
+#include "navigation_mesh_data.h"
 #include "navigation_mesh_editor_plugin.h"
+#include "navigation_mesh_generator.h"
 
 #ifdef TOOLS_ENABLED
 EditorNavigationMeshGenerator *_nav_mesh_generator = NULL;
 #endif
 
 void register_recast_types() {
+	ClassDB::register_class<NavigationMeshData>();
+	ClassDB::register_class<NavigationGenerator>();
+	ClassDB::register_class<DetourNavigationMesh>();
+	ClassDB::register_class<DetourNavigation>();
+
+	ClassDB::register_class<Crowd>();
+	ClassDB::register_class<Agent>();
+	ClassDB::register_class<AgentState>();
+
 #ifdef TOOLS_ENABLED
 	EditorPlugins::add_by_type<NavigationMeshEditorPlugin>();
 	_nav_mesh_generator = memnew(EditorNavigationMeshGenerator);
@@ -48,7 +63,7 @@ void register_recast_types() {
 
 	ClassDB::set_current_api(prev_api);
 
-	Engine::get_singleton()->add_singleton(Engine::Singleton("NavigationMeshGenerator", EditorNavigationMeshGenerator::get_singleton()));
+	Engine::get_singleton()->add_singleton(Engine::Singleton("EditorNavigationMeshGenerator", EditorNavigationMeshGenerator::get_singleton()));
 #endif
 }
 

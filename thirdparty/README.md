@@ -443,12 +443,13 @@ Files extracted from upstream source:
 ## recastnavigation
 
 - Upstream: https://github.com/recastnavigation/recastnavigation
-- version: git (ef3ea40f, 2017)
+- version: git (57610fa, 2019)
 - License: zlib
 
 Files extracted from upstream source:
 
 - `Recast/` folder
+- `Detour/` folder
 - License.txt
 
 

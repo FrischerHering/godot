@@ -55,13 +55,19 @@
 
 EditorNavigationMeshGenerator *EditorNavigationMeshGenerator::singleton = NULL;
 
-void EditorNavigationMeshGenerator::_add_vertex(const Vector3 &p_vec3, Vector<float> &p_verticies) {
+void NavigationGenerator::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("generate_data", "nav_mesh", "root_node"), &NavigationGenerator::generate_data);
+	ClassDB::bind_method(D_METHOD("generate_mesh", "nav_mesh", "root_node"), &NavigationGenerator::generate_mesh);
+	ClassDB::bind_method(D_METHOD("generate", "nav_mesh", "root_node"), &NavigationGenerator::generate);
+}
+
+void NavigationGenerator::_add_vertex(const Vector3 &p_vec3, Vector<float> &p_verticies) {
 	p_verticies.push_back(p_vec3.x);
 	p_verticies.push_back(p_vec3.y);
 	p_verticies.push_back(p_vec3.z);
 }
 
-void EditorNavigationMeshGenerator::_add_mesh(const Ref<Mesh> &p_mesh, const Transform &p_xform, Vector<float> &p_verticies, Vector<int> &p_indices) {
+void NavigationGenerator::_add_mesh(const Ref<Mesh> &p_mesh, const Transform &p_xform, Vector<float> &p_verticies, Vector<int> &p_indices) {
 	int current_vertex_count = 0;
 
 	for (int i = 0; i < p_mesh->get_surface_count(); i++) {
@@ -116,7 +122,7 @@ void EditorNavigationMeshGenerator::_add_mesh(const Ref<Mesh> &p_mesh, const Tra
 	}
 }
 
-void EditorNavigationMeshGenerator::_add_faces(const PoolVector3Array &p_faces, const Transform &p_xform, Vector<float> &p_verticies, Vector<int> &p_indices) {
+void NavigationGenerator::_add_faces(const PoolVector3Array &p_faces, const Transform &p_xform, Vector<float> &p_verticies, Vector<int> &p_indices) {
 	int face_count = p_faces.size() / 3;
 	int current_vertex_count = p_verticies.size() / 3;
 
@@ -131,7 +137,7 @@ void EditorNavigationMeshGenerator::_add_faces(const PoolVector3Array &p_faces, 
 	}
 }
 
-void EditorNavigationMeshGenerator::_parse_geometry(Transform p_accumulated_transform, Node *p_node, Vector<float> &p_verticies, Vector<int> &p_indices, int p_generate_from, uint32_t p_collision_mask, bool p_recurse_children) {
+void NavigationGenerator::_parse_geometry(Transform p_accumulated_transform, Node *p_node, Vector<float> &p_verticies, Vector<int> &p_indices, int p_generate_from, uint32_t p_collision_mask, bool p_recurse_children) {
 
 	if (Object::cast_to<MeshInstance>(p_node) && p_generate_from != NavigationMesh::PARSED_GEOMETRY_STATIC_COLLIDERS) {
 
@@ -270,39 +276,9 @@ void EditorNavigationMeshGenerator::_parse_geometry(Transform p_accumulated_tran
 	}
 }
 
-void EditorNavigationMeshGenerator::_convert_detail_mesh_to_native_navigation_mesh(const rcPolyMeshDetail *p_detail_mesh, Ref<NavigationMesh> p_nav_mesh) {
-
-	PoolVector<Vector3> nav_vertices;
-
-	for (int i = 0; i < p_detail_mesh->nverts; i++) {
-		const float *v = &p_detail_mesh->verts[i * 3];
-		nav_vertices.append(Vector3(v[0], v[1], v[2]));
-	}
-	p_nav_mesh->set_vertices(nav_vertices);
-
-	for (int i = 0; i < p_detail_mesh->nmeshes; i++) {
-		const unsigned int *m = &p_detail_mesh->meshes[i * 4];
-		const unsigned int bverts = m[0];
-		const unsigned int btris = m[2];
-		const unsigned int ntris = m[3];
-		const unsigned char *tris = &p_detail_mesh->tris[btris * 4];
-		for (unsigned int j = 0; j < ntris; j++) {
-			Vector<int> nav_indices;
-			nav_indices.resize(3);
-			// Polygon order in recast is opposite than godot's
-			nav_indices.write[0] = ((int)(bverts + tris[j * 4 + 0]));
-			nav_indices.write[1] = ((int)(bverts + tris[j * 4 + 2]));
-			nav_indices.write[2] = ((int)(bverts + tris[j * 4 + 1]));
-			p_nav_mesh->add_polygon(nav_indices);
-		}
-	}
-}
-
-void EditorNavigationMeshGenerator::_build_recast_navigation_mesh(Ref<NavigationMesh> p_nav_mesh, EditorProgress *ep,
-		rcHeightfield *hf, rcCompactHeightfield *chf, rcContourSet *cset, rcPolyMesh *poly_mesh, rcPolyMeshDetail *detail_mesh,
+void NavigationGenerator::_build_recast_navigation_mesh(Ref<NavigationMesh> p_nav_mesh, Ref<NavigationMeshData> p_nav_mesh_data,
 		Vector<float> &vertices, Vector<int> &indices) {
 	rcContext ctx;
-	ep->step(TTR("Setting up Configuration..."), 1);
 
 	const float *verts = vertices.ptr();
 	const int nverts = vertices.size() / 3;
@@ -336,16 +312,13 @@ void EditorNavigationMeshGenerator::_build_recast_navigation_mesh(Ref<Navigation
 	cfg.bmax[1] = bmax[1];
 	cfg.bmax[2] = bmax[2];
 
-	ep->step(TTR("Calculating grid size..."), 2);
 	rcCalcGridSize(cfg.bmin, cfg.bmax, cfg.cs, &cfg.width, &cfg.height);
 
-	ep->step(TTR("Creating heightfield..."), 3);
-	hf = rcAllocHeightfield();
+	rcHeightfield *hf = rcAllocHeightfield();
 
 	ERR_FAIL_COND(!hf);
 	ERR_FAIL_COND(!rcCreateHeightfield(&ctx, *hf, cfg.width, cfg.height, cfg.bmin, cfg.bmax, cfg.cs, cfg.ch));
 
-	ep->step(TTR("Marking walkable triangles..."), 4);
 	{
 		Vector<unsigned char> tri_areas;
 		tri_areas.resize(ntris);
@@ -365,9 +338,7 @@ void EditorNavigationMeshGenerator::_build_recast_navigation_mesh(Ref<Navigation
 	if (p_nav_mesh->get_filter_walkable_low_height_spans())
 		rcFilterWalkableLowHeightSpans(&ctx, cfg.walkableHeight, *hf);
 
-	ep->step(TTR("Constructing compact heightfield..."), 5);
-
-	chf = rcAllocCompactHeightfield();
+	rcCompactHeightfield *chf = rcAllocCompactHeightfield();
 
 	ERR_FAIL_COND(!chf);
 	ERR_FAIL_COND(!rcBuildCompactHeightfield(&ctx, cfg.walkableHeight, cfg.walkableClimb, *hf, *chf));
@@ -375,10 +346,8 @@ void EditorNavigationMeshGenerator::_build_recast_navigation_mesh(Ref<Navigation
 	rcFreeHeightField(hf);
 	hf = 0;
 
-	ep->step(TTR("Eroding walkable area..."), 6);
 	ERR_FAIL_COND(!rcErodeWalkableArea(&ctx, cfg.walkableRadius, *chf));
 
-	ep->step(TTR("Partitioning..."), 7);
 	if (p_nav_mesh->get_sample_partition_type() == NavigationMesh::SAMPLE_PARTITION_WATERSHED) {
 		ERR_FAIL_COND(!rcBuildDistanceField(&ctx, *chf));
 		ERR_FAIL_COND(!rcBuildRegions(&ctx, *chf, 0, cfg.minRegionArea, cfg.mergeRegionArea));
@@ -388,36 +357,80 @@ void EditorNavigationMeshGenerator::_build_recast_navigation_mesh(Ref<Navigation
 		ERR_FAIL_COND(!rcBuildLayerRegions(&ctx, *chf, 0, cfg.minRegionArea));
 	}
 
-	ep->step(TTR("Creating contours..."), 8);
-
-	cset = rcAllocContourSet();
+	rcContourSet *cset = rcAllocContourSet();
 
 	ERR_FAIL_COND(!cset);
 	ERR_FAIL_COND(!rcBuildContours(&ctx, *chf, cfg.maxSimplificationError, cfg.maxEdgeLen, *cset));
 
-	ep->step(TTR("Creating polymesh..."), 9);
-
-	poly_mesh = rcAllocPolyMesh();
+	rcPolyMesh *poly_mesh = p_nav_mesh_data->get_polymesh();
 	ERR_FAIL_COND(!poly_mesh);
 	ERR_FAIL_COND(!rcBuildPolyMesh(&ctx, *cset, cfg.maxVertsPerPoly, *poly_mesh));
 
-	detail_mesh = rcAllocPolyMeshDetail();
+	rcPolyMeshDetail *detail_mesh = p_nav_mesh_data->get_meshdetail();
 	ERR_FAIL_COND(!detail_mesh);
 	ERR_FAIL_COND(!rcBuildPolyMeshDetail(&ctx, *poly_mesh, *chf, cfg.detailSampleDist, cfg.detailSampleMaxError, *detail_mesh));
+
+	// Update poly flags from areas.
+	for (int i = 0; i < poly_mesh->npolys; ++i) {
+		if (poly_mesh->areas[i] == RC_WALKABLE_AREA) {
+			poly_mesh->flags[i] = DetourNavigationMesh::POLYFLAGS_WALK;
+		}
+	}
+
+	dtNavMeshCreateParams *create_params = p_nav_mesh_data->get_create_params();
+	create_params->verts = poly_mesh->verts;
+	create_params->vertCount = poly_mesh->nverts;
+	create_params->polys = poly_mesh->polys;
+	create_params->polyFlags = poly_mesh->flags;
+	create_params->polyAreas = poly_mesh->areas;
+	create_params->polyCount = poly_mesh->npolys;
+	create_params->nvp = poly_mesh->nvp;
+	create_params->detailMeshes = detail_mesh->meshes;
+	create_params->detailVerts = detail_mesh->verts;
+	create_params->detailVertsCount = detail_mesh->nverts;
+	create_params->detailTris = detail_mesh->tris;
+	create_params->detailTriCount = detail_mesh->ntris;
+	create_params->walkableHeight = cfg.walkableHeight;
+	create_params->walkableRadius = cfg.walkableRadius;
+	create_params->walkableClimb = cfg.walkableClimb;
+	rcVcopy(create_params->bmin, poly_mesh->bmin);
+	rcVcopy(create_params->bmax, poly_mesh->bmax);
+	create_params->cs = cfg.cs;
+	create_params->ch = cfg.ch;
+	create_params->buildBvTree = true;
 
 	rcFreeCompactHeightfield(chf);
 	chf = 0;
 	rcFreeContourSet(cset);
 	cset = 0;
+}
 
-	ep->step(TTR("Converting to native navigation mesh..."), 10);
+void EditorNavigationMeshGenerator::_convert_detail_mesh_to_native_navigation_mesh(const rcPolyMeshDetail *p_detail_mesh, Ref<NavigationMesh> p_nav_mesh) {
 
-	_convert_detail_mesh_to_native_navigation_mesh(detail_mesh, p_nav_mesh);
+	PoolVector<Vector3> nav_vertices;
 
-	rcFreePolyMesh(poly_mesh);
-	poly_mesh = 0;
-	rcFreePolyMeshDetail(detail_mesh);
-	detail_mesh = 0;
+	for (int i = 0; i < p_detail_mesh->nverts; i++) {
+		const float *v = &p_detail_mesh->verts[i * 3];
+		nav_vertices.append(Vector3(v[0], v[1], v[2]));
+	}
+	p_nav_mesh->set_vertices(nav_vertices);
+
+	for (int i = 0; i < p_detail_mesh->nmeshes; i++) {
+		const unsigned int *m = &p_detail_mesh->meshes[i * 4];
+		const unsigned int bverts = m[0];
+		const unsigned int btris = m[2];
+		const unsigned int ntris = m[3];
+		const unsigned char *tris = &p_detail_mesh->tris[btris * 4];
+		for (unsigned int j = 0; j < ntris; j++) {
+			Vector<int> nav_indices;
+			nav_indices.resize(3);
+			// Polygon order in recast is opposite than godot's
+			nav_indices.write[0] = ((int)(bverts + tris[j * 4 + 0]));
+			nav_indices.write[1] = ((int)(bverts + tris[j * 4 + 2]));
+			nav_indices.write[2] = ((int)(bverts + tris[j * 4 + 1]));
+			p_nav_mesh->add_polygon(nav_indices);
+		}
+	}
 }
 
 EditorNavigationMeshGenerator *EditorNavigationMeshGenerator::get_singleton() {
@@ -431,12 +444,8 @@ EditorNavigationMeshGenerator::EditorNavigationMeshGenerator() {
 EditorNavigationMeshGenerator::~EditorNavigationMeshGenerator() {
 }
 
-void EditorNavigationMeshGenerator::bake(Ref<NavigationMesh> p_nav_mesh, Node *p_node) {
-
-	ERR_FAIL_COND(!p_nav_mesh.is_valid());
-
-	EditorProgress ep("bake", TTR("Navigation Mesh Generator Setup:"), 11);
-	ep.step(TTR("Parsing Geometry..."), 0);
+Ref<NavigationMeshData> NavigationGenerator::generate_data(Ref<NavigationMesh> p_nav_mesh, Node *p_node) {
+	ERR_FAIL_COND_V(!p_nav_mesh.is_valid(), NULL);
 
 	Vector<float> vertices;
 	Vector<int> indices;
@@ -457,32 +466,38 @@ void EditorNavigationMeshGenerator::bake(Ref<NavigationMesh> p_nav_mesh, Node *p
 		_parse_geometry(navmesh_xform, E->get(), vertices, indices, geometry_type, collision_mask, recurse_children);
 	}
 
+	Ref<NavigationMeshData> navigation_mesh_data(memnew(NavigationMeshData));
 	if (vertices.size() > 0 && indices.size() > 0) {
-
-		rcHeightfield *hf = NULL;
-		rcCompactHeightfield *chf = NULL;
-		rcContourSet *cset = NULL;
-		rcPolyMesh *poly_mesh = NULL;
-		rcPolyMeshDetail *detail_mesh = NULL;
-
-		_build_recast_navigation_mesh(p_nav_mesh, &ep, hf, chf, cset, poly_mesh, detail_mesh, vertices, indices);
-
-		rcFreeHeightField(hf);
-		hf = 0;
-
-		rcFreeCompactHeightfield(chf);
-		chf = 0;
-
-		rcFreeContourSet(cset);
-		cset = 0;
-
-		rcFreePolyMesh(poly_mesh);
-		poly_mesh = 0;
-
-		rcFreePolyMeshDetail(detail_mesh);
-		detail_mesh = 0;
+		_build_recast_navigation_mesh(p_nav_mesh, navigation_mesh_data, vertices, indices);
+		return navigation_mesh_data;
 	}
-	ep.step(TTR("Done!"), 11);
+
+	return NULL;
+}
+
+Ref<DetourNavigationMesh> NavigationGenerator::generate_mesh(Ref<NavigationMesh> p_nav_mesh, Node *p_node) {
+	ERR_FAIL_COND_V(!p_nav_mesh.is_valid(), NULL);
+	Ref<NavigationMeshData> data = generate_data(p_nav_mesh, p_node);
+	ERR_FAIL_COND_V(!data.is_valid(), NULL);
+	Ref<DetourNavigationMesh> navigation_mesh(memnew(DetourNavigationMesh));
+	navigation_mesh->set_data(data);
+	return navigation_mesh;
+}
+
+Ref<DetourNavigation> NavigationGenerator::generate(Ref<NavigationMesh> p_nav_mesh, Node *p_node) {
+	ERR_FAIL_COND_V(!p_nav_mesh.is_valid(), NULL);
+	Ref<DetourNavigationMesh> navigation_mesh = generate_mesh(p_nav_mesh, p_node);
+	ERR_FAIL_COND_V(!navigation_mesh->is_valid(), NULL);
+	Ref<DetourNavigation> navigation(memnew(DetourNavigation));
+	navigation->set_navigation_mesh(navigation_mesh);
+	return navigation;
+}
+
+void EditorNavigationMeshGenerator::bake(Ref<NavigationMesh> p_nav_mesh, Node *p_node) {
+	static NavigationGenerator generator;
+	Ref<NavigationMeshData> data = generator.generate_data(p_nav_mesh, p_node);
+	ERR_FAIL_COND(!data.is_valid());
+	_convert_detail_mesh_to_native_navigation_mesh(data->get_meshdetail(), p_nav_mesh);
 }
 
 void EditorNavigationMeshGenerator::clear(Ref<NavigationMesh> p_nav_mesh) {

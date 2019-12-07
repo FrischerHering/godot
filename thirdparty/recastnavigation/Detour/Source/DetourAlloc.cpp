@@ -17,44 +17,34 @@
 //
 
 #include <stdlib.h>
-#include <string.h>
-#include "RecastAlloc.h"
-#include "RecastAssert.h"
+#include "DetourAlloc.h"
 
-static void *rcAllocDefault(size_t size, rcAllocHint)
+static void *dtAllocDefault(size_t size, dtAllocHint)
 {
 	return malloc(size);
 }
 
-static void rcFreeDefault(void *ptr)
+static void dtFreeDefault(void *ptr)
 {
 	free(ptr);
 }
 
-static rcAllocFunc* sRecastAllocFunc = rcAllocDefault;
-static rcFreeFunc* sRecastFreeFunc = rcFreeDefault;
+static dtAllocFunc* sAllocFunc = dtAllocDefault;
+static dtFreeFunc* sFreeFunc = dtFreeDefault;
 
-/// @see rcAlloc, rcFree
-void rcAllocSetCustom(rcAllocFunc *allocFunc, rcFreeFunc *freeFunc)
+void dtAllocSetCustom(dtAllocFunc *allocFunc, dtFreeFunc *freeFunc)
 {
-	sRecastAllocFunc = allocFunc ? allocFunc : rcAllocDefault;
-	sRecastFreeFunc = freeFunc ? freeFunc : rcFreeDefault;
+	sAllocFunc = allocFunc ? allocFunc : dtAllocDefault;
+	sFreeFunc = freeFunc ? freeFunc : dtFreeDefault;
 }
 
-/// @see rcAllocSetCustom
-void* rcAlloc(size_t size, rcAllocHint hint)
+void* dtAlloc(size_t size, dtAllocHint hint)
 {
-	return sRecastAllocFunc(size, hint);
+	return sAllocFunc(size, hint);
 }
 
-/// @par
-///
-/// @warning This function leaves the value of @p ptr unchanged.  So it still
-/// points to the same (now invalid) location, and not to null.
-/// 
-/// @see rcAllocSetCustom
-void rcFree(void* ptr)
+void dtFree(void* ptr)
 {
 	if (ptr)
-		sRecastFreeFunc(ptr);
+		sFreeFunc(ptr);
 }

@@ -7,23 +7,38 @@ env_recast = env_modules.Clone()
 
 # Thirdparty source files
 if env['builtin_recast']:
-    thirdparty_dir = "#thirdparty/recastnavigation/Recast/"
+    thirdparty_dir = "#thirdparty/recastnavigation/"
     thirdparty_sources = [
-		"Source/Recast.cpp",
-		"Source/RecastAlloc.cpp",
-		"Source/RecastArea.cpp",
-		"Source/RecastAssert.cpp",
-		"Source/RecastContour.cpp",
-		"Source/RecastFilter.cpp",
-		"Source/RecastLayers.cpp",
-		"Source/RecastMesh.cpp",
-		"Source/RecastMeshDetail.cpp",
-		"Source/RecastRasterization.cpp",
-		"Source/RecastRegion.cpp",
+        "Recast/Source/Recast.cpp",
+        "Recast/Source/RecastAlloc.cpp",
+        "Recast/Source/RecastArea.cpp",
+        "Recast/Source/RecastAssert.cpp",
+        "Recast/Source/RecastContour.cpp",
+        "Recast/Source/RecastFilter.cpp",
+        "Recast/Source/RecastLayers.cpp",
+        "Recast/Source/RecastMesh.cpp",
+        "Recast/Source/RecastMeshDetail.cpp",
+        "Recast/Source/RecastRasterization.cpp",
+        "Recast/Source/RecastRegion.cpp",
+        "Detour/Source/DetourAlloc.cpp",
+        "Detour/Source/DetourAssert.cpp",
+        "Detour/Source/DetourCommon.cpp",
+        "Detour/Source/DetourNavMesh.cpp",
+        "Detour/Source/DetourNavMeshBuilder.cpp",
+        "Detour/Source/DetourNavMeshQuery.cpp",
+        "Detour/Source/DetourNode.cpp",
+        "DetourCrowd/Source/DetourCrowd.cpp",
+        "DetourCrowd/Source/DetourLocalBoundary.cpp",
+        "DetourCrowd/Source/DetourObstacleAvoidance.cpp",
+        "DetourCrowd/Source/DetourPathCorridor.cpp",
+        "DetourCrowd/Source/DetourPathQueue.cpp",
+        "DetourCrowd/Source/DetourProximityGrid.cpp",
     ]
     thirdparty_sources = [thirdparty_dir + file for file in thirdparty_sources]
 
-    env_recast.Prepend(CPPPATH=[thirdparty_dir + "/Include"])
+    env_recast.Prepend(CPPPATH=[thirdparty_dir + "/Recast/Include"])
+    env_recast.Prepend(CPPPATH=[thirdparty_dir + "/Detour/Include"])
+    env_recast.Prepend(CPPPATH=[thirdparty_dir + "/DetourCrowd/Include"])
 
     env_thirdparty = env_recast.Clone()
     env_thirdparty.disable_warnings()

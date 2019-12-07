@@ -34,12 +34,15 @@
 #include "editor/editor_node.h"
 #include "scene/3d/navigation_mesh.h"
 
+#include "detour_navigation.h"
+#include "detour_navigation_mesh.h"
+#include "navigation_mesh_data.h"
+
 #include <Recast.h>
 
-class EditorNavigationMeshGenerator : public Object {
-	GDCLASS(EditorNavigationMeshGenerator, Object);
-
-	static EditorNavigationMeshGenerator *singleton;
+/// Generator only class, just for building navigation meshes
+class NavigationGenerator : public Object {
+	GDCLASS(NavigationGenerator, Object);
 
 protected:
 	static void _bind_methods();
@@ -49,10 +52,24 @@ protected:
 	static void _add_faces(const PoolVector3Array &p_faces, const Transform &p_xform, Vector<float> &p_verticies, Vector<int> &p_indices);
 	static void _parse_geometry(Transform p_accumulated_transform, Node *p_node, Vector<float> &p_verticies, Vector<int> &p_indices, int p_generate_from, uint32_t p_collision_mask, bool p_recurse_children);
 
+	static void _build_recast_navigation_mesh(Ref<NavigationMesh> p_nav_mesh, Ref<NavigationMeshData> p_nav_mesh_data, Vector<float> &vertices, Vector<int> &indices);
+
+public:
+	Ref<NavigationMeshData> generate_data(Ref<NavigationMesh> p_nav_mesh, Node *p_node);
+	Ref<DetourNavigationMesh> generate_mesh(Ref<NavigationMesh> p_nav_mesh, Node *p_node);
+	Ref<DetourNavigation> generate(Ref<NavigationMesh> p_nav_mesh, Node *p_node);
+};
+
+// I don't why this is a singleton, but I'll keep this class to not break stuff...
+class EditorNavigationMeshGenerator : public Object {
+	GDCLASS(EditorNavigationMeshGenerator, Object);
+
+	static EditorNavigationMeshGenerator *singleton;
+
+protected:
+	static void _bind_methods();
+
 	static void _convert_detail_mesh_to_native_navigation_mesh(const rcPolyMeshDetail *p_detail_mesh, Ref<NavigationMesh> p_nav_mesh);
-	static void _build_recast_navigation_mesh(Ref<NavigationMesh> p_nav_mesh, EditorProgress *ep,
-			rcHeightfield *hf, rcCompactHeightfield *chf, rcContourSet *cset, rcPolyMesh *poly_mesh,
-			rcPolyMeshDetail *detail_mesh, Vector<float> &vertices, Vector<int> &indices);
 
 public:
 	static EditorNavigationMeshGenerator *get_singleton();
