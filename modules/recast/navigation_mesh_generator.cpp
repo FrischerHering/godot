@@ -484,11 +484,11 @@ Ref<DetourNavigationMesh> NavigationGenerator::generate_mesh(Ref<NavigationMesh>
 	return navigation_mesh;
 }
 
-Ref<DetourNavigation> NavigationGenerator::generate(Ref<NavigationMesh> p_nav_mesh, Node *p_node) {
+Node *NavigationGenerator::generate(Ref<NavigationMesh> p_nav_mesh, Node *p_node) {
 	ERR_FAIL_COND_V(!p_nav_mesh.is_valid(), NULL);
 	Ref<DetourNavigationMesh> navigation_mesh = generate_mesh(p_nav_mesh, p_node);
 	ERR_FAIL_COND_V(!navigation_mesh->is_valid(), NULL);
-	Ref<DetourNavigation> navigation(memnew(DetourNavigation));
+	DetourNavigation *navigation = memnew(DetourNavigation);
 	navigation->set_navigation_mesh(navigation_mesh);
 	return navigation;
 }

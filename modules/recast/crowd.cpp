@@ -11,16 +11,22 @@ void Crowd::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("update", "delta"), &Crowd::update);
 }
 
+void Crowd::_notification(int p_what) {
+	Node *parent_node = get_parent();
+
+	switch (p_what) {
+		case NOTIFICATION_ENTER_TREE:
+			ERR_FAIL_COND(!update_navigation(parent_node));
+			break;
+	}
+}
+
 void Crowd::reassign_agents() {
-	for (Map<Ref<Agent>, int>::Element *E = _agents_to_id.front(); E; E = E->next()) {
-		Ref<Agent> agent = E->key();
+	for (Map<Agent *, int>::Element *E = _agents_to_id.front(); E; E = E->next()) {
+		Agent *agent = E->key();
 		dtCrowdAgentParams ap = agent->create_dt_agent_params();
 
-		Vector3 position = agent->get_spawn_position();
-		Ref<AgentState> state = agent->get_latest_state();
-		if (state.is_valid()) {
-			position = state->get_position();
-		}
+		Vector3 position = agent->get_transform().origin;
 
 		float pos[] = { position.x, position.y, position.z };
 		int agent_id = _crowd->addAgent(pos, &ap);
@@ -32,7 +38,9 @@ Crowd::Crowd() {
 	_crowd = dtAllocCrowd();
 	_is_valid = false;
 
-	current_max_agents = 0;
+	_navigation = NULL;
+
+	current_max_agents = 10;
 	auto_grow_multiplier = 0.5f;
 
 	current_max_radius = 1.f;
@@ -46,8 +54,11 @@ void Crowd::clear() {
 	_agents_to_id.clear();
 }
 
-bool Crowd::create(int max_agents, float max_agent_radius, Ref<DetourNavigation> navigation, bool clear_agents) {
-	ERR_FAIL_COND_V(!navigation.is_valid() || !navigation->is_valid(), false);
+bool Crowd::create(int max_agents, float max_agent_radius, Node *p_navigation_node, bool clear_agents) {
+	DetourNavigation *navigation = Object::cast_to<DetourNavigation>(p_navigation_node);
+	ERR_FAIL_COND_V(navigation == NULL, false);
+
+	ERR_FAIL_COND_V(!navigation->is_valid(), false);
 	ERR_FAIL_COND_V(!_crowd->init(max_agents, max_agent_radius, navigation->get_navigation_mesh()->get_dt_navmesh()), false);
 
 	current_max_agents = max_agents;
@@ -97,14 +108,16 @@ bool Crowd::create(int max_agents, float max_agent_radius, Ref<DetourNavigation>
 	return true;
 }
 
-bool Crowd::add_agent(Ref<Agent> p_agent) {
-	ERR_FAIL_COND_V(!p_agent.is_valid(), false);
+bool Crowd::add_agent(Node *p_agent_node) {
+	Agent *p_agent = Object::cast_to<Agent>(p_agent_node);
+	ERR_FAIL_COND_V(p_agent == NULL, false);
+
 	ERR_FAIL_COND_V(!is_valid(), false);
 	ERR_FAIL_COND_V(_agents_to_id.has(p_agent), false);
 
 	extend_if_necessary(p_agent->get_radius());
 
-	Vector3 spawn_position = p_agent->get_spawn_position();
+	Vector3 spawn_position = p_agent->get_transform().origin;
 	float pos[] = { spawn_position.x, spawn_position.y, spawn_position.z };
 	dtCrowdAgentParams ap = p_agent->create_dt_agent_params();
 	int agent_id = _crowd->addAgent(pos, &ap);
@@ -116,8 +129,11 @@ bool Crowd::add_agent(Ref<Agent> p_agent) {
 	return true;
 }
 
-void Crowd::remove_agent(Ref<Agent> p_agent) {
+void Crowd::remove_agent(Node *p_agent_node) {
 	ERR_FAIL_COND(!is_valid());
+
+	Agent *p_agent = Object::cast_to<Agent>(p_agent_node);
+	ERR_FAIL_COND(p_agent == NULL);
 
 	if (has_agent(p_agent)) {
 		int agent_id = _agents_to_id[p_agent];
@@ -126,30 +142,10 @@ void Crowd::remove_agent(Ref<Agent> p_agent) {
 	}
 }
 
-Ref<AgentState> Crowd::get_agent_state(Ref<Agent> p_agent) {
-	Ref<AgentState> ret(memnew(AgentState));
-	ERR_FAIL_COND_V(!is_valid(), ret);
+bool Crowd::request_move_target(Node *p_agent_node, Vector3 p_target) {
+	Agent *p_agent = Object::cast_to<Agent>(p_agent_node);
+	ERR_FAIL_COND_V(p_agent == NULL, false);
 
-	if (has_agent(p_agent)) {
-		int agent_id = _agents_to_id[p_agent];
-		const dtCrowdAgent *ca = _crowd->getAgent(agent_id);
-		Vector3 position(ca->npos[0], ca->npos[1], ca->npos[2]);
-		Vector3 velocity(ca->vel[0], ca->vel[1], ca->vel[2]);
-
-		Vector3 target = position;
-		if (ca->targetState == DT_CROWDAGENT_TARGET_VALID) {
-			target = Vector3(ca->targetPos[0], ca->targetPos[1], ca->targetPos[2]);
-		}
-
-		ret->set_position(position);
-		ret->set_velocity(velocity);
-	}
-
-	return ret;
-}
-
-bool Crowd::request_move_target(Ref<Agent> p_agent, Vector3 p_target) {
-	ERR_FAIL_COND_V(!p_agent.is_valid(), false);
 	ERR_FAIL_COND_V(!is_valid(), false);
 	ERR_FAIL_COND_V(!_agents_to_id.has(p_agent), false);
 
@@ -159,11 +155,14 @@ bool Crowd::request_move_target(Ref<Agent> p_agent, Vector3 p_target) {
 	return _crowd->requestMoveTarget(_agents_to_id[p_agent], target.poly_ref, target.point);
 }
 
-bool Crowd::update_navigation(Ref<DetourNavigation> navigation) {
-	return create(current_max_agents, current_max_radius, navigation, false);
+bool Crowd::update_navigation(Node *p_navigation) {
+	return create(current_max_agents, current_max_radius, p_navigation, false);
 }
 
-bool Crowd::has_agent(Ref<Agent> p_agent) {
+bool Crowd::has_agent(Node *p_agent_node) {
+	Agent *p_agent = Object::cast_to<Agent>(p_agent_node);
+	ERR_FAIL_COND_V(p_agent == NULL, false);
+
 	return _agents_to_id.has(p_agent);
 }
 
@@ -194,48 +193,19 @@ void Crowd::extend_if_necessary(float next_agent_radius) {
 void Crowd::update(float delta) {
 	if (is_valid()) {
 		_crowd->update(delta, NULL);
-		for (Map<Ref<Agent>, int>::Element *E = _agents_to_id.front(); E; E = E->next()) {
-			Ref<Agent> agent = E->key();
-			agent->fetch_state();
+		for (Map<Agent *, int>::Element *E = _agents_to_id.front(); E; E = E->next()) {
+			Agent *agent = E->key();
+
+			int agent_id = _agents_to_id[agent];
+			const dtCrowdAgent *ca = _crowd->getAgent(agent_id);
+			Vector3 position(ca->npos[0], ca->npos[1], ca->npos[2]);
+			Vector3 velocity(ca->vel[0], ca->vel[1], ca->vel[2]);
+
+			Transform t = agent->get_transform();
+			t.origin = position;
+			agent->set_transform(t);
+			// TODO auto-rotate
+			// TODO pass velocity
 		}
 	}
-}
-
-// ////////////////////////////////////////////////////////////////////////////
-
-void AgentState::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("set_position", "position"), &AgentState::set_position);
-	ClassDB::bind_method(D_METHOD("get_position"), &AgentState::get_position);
-	ClassDB::bind_method(D_METHOD("set_velocity", "velocity"), &AgentState::set_velocity);
-	ClassDB::bind_method(D_METHOD("get_velocity"), &AgentState::get_velocity);
-	ClassDB::bind_method(D_METHOD("set_target", "target"), &AgentState::set_target);
-	ClassDB::bind_method(D_METHOD("get_target"), &AgentState::get_target);
-
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "position"), "set_position", "get_position");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "velocity"), "set_velocity", "get_velocity");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "target"), "set_target", "get_target");
-}
-
-void AgentState::set_position(Vector3 p_position) {
-	position = p_position;
-}
-
-Vector3 AgentState::get_position() const {
-	return position;
-}
-
-void AgentState::set_velocity(Vector3 p_velocity) {
-	velocity = p_velocity;
-}
-
-Vector3 AgentState::get_velocity() const {
-	return velocity;
-}
-
-void AgentState::set_target(Vector3 p_target) {
-	target = p_target;
-}
-
-Vector3 AgentState::get_target() const {
-	return target;
 }

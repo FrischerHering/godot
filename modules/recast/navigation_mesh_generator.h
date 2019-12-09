@@ -57,7 +57,7 @@ protected:
 public:
 	Ref<NavigationMeshData> generate_data(Ref<NavigationMesh> p_nav_mesh, Node *p_node);
 	Ref<DetourNavigationMesh> generate_mesh(Ref<NavigationMesh> p_nav_mesh, Node *p_node);
-	Ref<DetourNavigation> generate(Ref<NavigationMesh> p_nav_mesh, Node *p_node);
+	Node *generate(Ref<NavigationMesh> p_nav_mesh, Node *p_node);
 };
 
 // I don't why this is a singleton, but I'll keep this class to not break stuff...

@@ -3,12 +3,9 @@
 void Agent::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("add_to_crowd", "crowd"), &Agent::add_to_crowd);
 	ClassDB::bind_method(D_METHOD("remove_from_crowd"), &Agent::remove_from_crowd);
-	ClassDB::bind_method(D_METHOD("get_latest_state"), &Agent::get_latest_state);
 
 	ClassDB::bind_method(D_METHOD("request_move_target", "target"), &Agent::request_move_target);
 
-	ClassDB::bind_method(D_METHOD("set_spawn_position", "spawn_position"), &Agent::set_spawn_position);
-	ClassDB::bind_method(D_METHOD("get_spawn_position"), &Agent::get_spawn_position);
 	ClassDB::bind_method(D_METHOD("set_radius", "radius"), &Agent::set_radius);
 	ClassDB::bind_method(D_METHOD("get_radius"), &Agent::get_radius);
 	ClassDB::bind_method(D_METHOD("set_height", "height"), &Agent::set_height);
@@ -26,7 +23,6 @@ void Agent::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_obstacle_avoidance", "obstacle_avoidance"), &Agent::set_obstacle_avoidance);
 	ClassDB::bind_method(D_METHOD("get_obstacle_avoidance"), &Agent::get_obstacle_avoidance);
 
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "spawn_position"), "set_spawn_position", "get_spawn_position");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "radius"), "set_radius", "get_radius");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "height"), "set_height", "get_height");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "max_acceleration"), "set_max_acceleration", "get_max_acceleration");
@@ -35,6 +31,19 @@ void Agent::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "path_optimization_factor"), "set_path_optimization_factor", "get_path_optimization_factor");
 	ADD_PROPERTY(PropertyInfo(Variant::REAL, "separation_weight"), "set_separation_weight", "get_separation_weight");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "obstacle_avoidance"), "set_obstacle_avoidance", "get_obstacle_avoidance");
+}
+
+void Agent::_notification(int p_what) {
+	Node *parent_node = get_parent();
+
+	switch (p_what) {
+		case NOTIFICATION_ENTER_TREE:
+			ERR_FAIL_COND(!add_to_crowd(parent_node));
+			break;
+		case NOTIFICATION_EXIT_TREE:
+			remove_from_crowd();
+			break;
+	}
 }
 
 Agent::Agent() {
@@ -48,10 +57,8 @@ Agent::Agent() {
 
 	separation_weight = 0.f;
 	obstacle_avoidance = Crowd::CROWD_OBST_AVOID_GOOD;
-}
 
-Agent::~Agent() {
-	remove_from_crowd();
+	_crowd_ref = NULL;
 }
 
 dtCrowdAgentParams Agent::create_dt_agent_params() const {
@@ -69,8 +76,10 @@ dtCrowdAgentParams Agent::create_dt_agent_params() const {
 	return params;
 }
 
-bool Agent::add_to_crowd(Ref<Crowd> p_crowd) {
-	ERR_FAIL_COND_V(!p_crowd.is_valid(), false);
+bool Agent::add_to_crowd(Node *p_crowd_node) {
+	Crowd *p_crowd = Object::cast_to<Crowd>(p_crowd_node);
+	ERR_FAIL_COND_V(p_crowd == NULL, false);
+
 	ERR_FAIL_COND_V(!p_crowd->is_valid(), false);
 
 	remove_from_crowd();
@@ -83,32 +92,15 @@ bool Agent::add_to_crowd(Ref<Crowd> p_crowd) {
 }
 
 void Agent::remove_from_crowd() {
-	if (_crowd_ref.is_valid()) {
+	if (_crowd_ref) {
 		_crowd_ref->remove_agent(this);
-		_crowd_ref.unref();
+		_crowd_ref = NULL;
 	}
 }
 
-Ref<AgentState> Agent::fetch_state() {
-	ERR_FAIL_COND_V(!_crowd_ref.is_valid(), NULL);
-	_latest_state = _crowd_ref->get_agent_state(this);
-	return _latest_state;
-}
-
-Ref<AgentState> Agent::get_latest_state() const {
-	return _latest_state;
-}
-
 bool Agent::request_move_target(Vector3 p_target) {
-	ERR_FAIL_COND_V(!_crowd_ref.is_valid(), false);
+	ERR_FAIL_COND_V(_crowd_ref == NULL, false);
 	return _crowd_ref->request_move_target(this, p_target);
-}
-
-void Agent::set_spawn_position(Vector3 p_spawn_position) {
-	spawn_position = p_spawn_position;
-}
-Vector3 Agent::get_spawn_position() const {
-	return spawn_position;
 }
 
 void Agent::set_radius(float p_radius) {

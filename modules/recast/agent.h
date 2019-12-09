@@ -3,17 +3,17 @@
 
 #include "core/vector.h"
 #include "crowd.h"
+#include "scene/3d/spatial.h"
 #include "scene/main/node.h"
 
 #include <DetourCrowd.h>
 
-class Agent : public Reference {
-	GDCLASS(Agent, Reference);
+class Agent : public Spatial {
+	GDCLASS(Agent, Spatial);
 
 protected:
 	static void _bind_methods();
-
-	Vector3 spawn_position;
+	void _notification(int p_what);
 
 	float radius;
 	float height;
@@ -29,24 +29,17 @@ protected:
 	bool is_valid_crowd_ref() const;
 
 private:
-	Ref<Crowd> _crowd_ref;
-	Ref<AgentState> _latest_state;
+	Crowd *_crowd_ref;
 
 public:
 	Agent();
-	~Agent();
 
-	bool add_to_crowd(Ref<Crowd> p_crowd);
+	bool add_to_crowd(Node *p_crowd);
 	void remove_from_crowd();
-	Ref<AgentState> fetch_state();
-	Ref<AgentState> get_latest_state() const;
 
 	bool request_move_target(Vector3 p_target);
 
 	dtCrowdAgentParams create_dt_agent_params() const;
-
-	void set_spawn_position(Vector3 p_spawn_position);
-	Vector3 get_spawn_position() const;
 
 	void set_radius(float p_radius);
 	float get_radius() const;

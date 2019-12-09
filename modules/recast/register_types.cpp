@@ -50,7 +50,6 @@ void register_recast_types() {
 
 	ClassDB::register_class<Crowd>();
 	ClassDB::register_class<Agent>();
-	ClassDB::register_class<AgentState>();
 
 #ifdef TOOLS_ENABLED
 	EditorPlugins::add_by_type<NavigationMeshEditorPlugin>();

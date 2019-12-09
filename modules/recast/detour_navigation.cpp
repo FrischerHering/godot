@@ -1,6 +1,7 @@
 #include "detour_navigation.h"
 #include "core/list.h"
 #include "core/vector.h"
+#include "navigation_mesh_generator.h"
 
 DetourNavigation::DetourNavigation() {
 	_navmesh_query = dtAllocNavMeshQuery();
@@ -11,15 +12,31 @@ DetourNavigation::~DetourNavigation() {
 	dtFreeNavMeshQuery(_navmesh_query);
 }
 
+void DetourNavigation::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("find_path", "start_point", "end_point"), &DetourNavigation::find_path);
+	ClassDB::bind_method(D_METHOD("set_navigation_mesh", "navigation_mesh"), &DetourNavigation::set_navigation_mesh);
+	ClassDB::bind_method(D_METHOD("rebuild_navigation_mesh"), &DetourNavigation::rebuild_navigation_mesh);
+
+	ClassDB::bind_method(D_METHOD("set_geometry_root_node", "root_node"), &DetourNavigation::set_geometry_root_node);
+	ClassDB::bind_method(D_METHOD("get_geometry_root_node"), &DetourNavigation::get_geometry_root_node);
+
+	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "geometry_root_node"), "set_geometry_root_node", "get_geometry_root_node");
+
+	ADD_SIGNAL(MethodInfo("navigation_mesh_changed"));
+}
+
+void DetourNavigation::_notification(int p_what) {
+	switch (p_what) {
+		case NOTIFICATION_ENTER_TREE:
+			rebuild_navigation_mesh();
+			break;
+	}
+}
+
 void DetourNavigation::reset() {
 	dtFreeNavMeshQuery(_navmesh_query);
 	_navmesh_query = dtAllocNavMeshQuery();
 	_navmesh_set = false;
-}
-
-void DetourNavigation::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("find_path", "start_point", "end_point"), &DetourNavigation::find_path);
-	ClassDB::bind_method(D_METHOD("set_navigation_mesh", "navigation_mesh"), &DetourNavigation::set_navigation_mesh);
 }
 
 bool DetourNavigation::set_navigation_mesh(Ref<DetourNavigationMesh> p_navigation_mesh) {
@@ -30,6 +47,8 @@ bool DetourNavigation::set_navigation_mesh(Ref<DetourNavigationMesh> p_navigatio
 
 	_navigation_mesh_ref = p_navigation_mesh;
 	_navmesh_set = true;
+	emit_signal("navigation_mesh_changed");
+
 	return true;
 }
 
@@ -88,4 +107,23 @@ PolySearchResult DetourNavigation::find_nearest_poly(Vector3 p_position) {
 
 	ret.success = true;
 	return ret;
+}
+
+bool DetourNavigation::rebuild_navigation_mesh() {
+	static NavigationGenerator navgen;
+	// TODO: better way for navgen parameters
+	Ref<NavigationMesh> godot_navmesh(memnew(NavigationMesh));
+	Ref<DetourNavigationMesh> navmesh = navgen.generate_mesh(godot_navmesh, get_node(geometry_root_node_path));
+	// TODO: emit signal about rebuilt navigation
+	return set_navigation_mesh(navmesh);
+}
+
+// ////////////////////////////////////////////////////////////////////////////
+
+void DetourNavigation::set_geometry_root_node(NodePath p_node) {
+	geometry_root_node_path = p_node;
+}
+
+NodePath DetourNavigation::get_geometry_root_node() const {
+	return geometry_root_node_path;
 }
